@@ -1,23 +1,89 @@
 @extends('layouts.optifit-user')
 
-@section('title', 'توصيات تناسبك | OptiFit APEX')
+@section('title', 'توصيات OptiFit الذكية')
 @section('eyebrow', 'USER / SMART MATCH')
-@section('page-heading', 'توصيات تناسبك')
+@section('page-heading', 'المساعد الذكي')
 
 @section('content')
 
+<style>
+    .smart-recommendation {
+        padding: 26px;
+        margin: 22px 0;
+        border: 1px solid rgba(94, 234, 212, .3);
+        border-radius: 20px;
+        background: linear-gradient(135deg, #173842, #102b35);
+    }
+
+    .smart-recommendation h2 {
+        margin: 12px 0;
+        font-size: clamp(1.5rem, 3vw, 2.2rem);
+    }
+
+    .smart-recommendation p {
+        line-height: 1.9;
+    }
+
+    .smart-reasons {
+        margin: 16px 0;
+        padding-inline-start: 24px;
+        line-height: 2;
+    }
+
+    .smart-price {
+        font-weight: bold;
+        color: #5eead4;
+        margin: 12px 0;
+    }
+
+    .smart-alternatives {
+        margin-top: 28px;
+    }
+
+    .smart-alternatives h2 {
+        margin-bottom: 16px;
+    }
+
+    .smart-alternative-card {
+        padding: 20px;
+        border-radius: 16px;
+        background: #17313b;
+        border: 1px solid rgba(255, 255, 255, .1);
+    }
+
+    .smart-alternative-card h3 {
+        margin: 8px 0;
+    }
+
+    .smart-alternative-card ul {
+        padding-inline-start: 22px;
+        line-height: 1.9;
+    }
+
+    .smart-alternative-card .apx-primary,
+    .smart-recommendation .apx-primary {
+        display: inline-flex;
+        margin-top: 14px;
+    }
+</style>
+
 <section class="apx-page-hero">
     <div>
-        <span class="apx-eyebrow">SMART MATCH / YOUR PREFERENCES</span>
-        <h1>نوادي تناسب <em>تفضيلاتك.</em></h1>
+        <span class="apx-eyebrow">
+            SMART MATCH / PERSONALIZED FOR YOU
+        </span>
+
+        <h1>اكتشف النادي <em>الأنسب إلك.</em></h1>
+
         <p>
-            نرشح لك النوادي المعتمدة بناءً على أنشطتك المفضلة،
-            المرافق، المنطقة والميزانية المحفوظة.
+            OptiFit بحلل تفضيلاتك المحفوظة بالبروفايل
+            وبيرشحلك النوادي الأكثر توافقًا معها تلقائيًا.
         </p>
     </div>
 
-    <a class="apx-secondary" href="{{ route('user.personal') }}">
-        تحديث التفضيلات
+    <a class="apx-secondary"
+        href="{{ route('user.personal') }}">
+        تحديث تفضيلاتي
     </a>
 </section>
 
@@ -38,12 +104,12 @@
                 ? number_format($preference->max_budget, 0) . ' د.أ'
                 : '—' }}
         </strong>
-        <span>الميزانية</span>
+        <span>ميزانيتك</span>
     </article>
 
     <article class="apx-mini-stat">
         <strong>{{ $recommendations->count() }}</strong>
-        <span>نوادٍ مناسبة</span>
+        <span>نوادٍ متوافقة</span>
     </article>
 </div>
 
@@ -51,11 +117,14 @@
 
 <section class="apx-panel apx-empty">
     <h2>خلينا نتعرف على تفضيلاتك أولًا</h2>
+
     <p>
-        حددي الأنشطة والمرافق والميزانية أو المنطقة
-        حتى نقدر نقترح عليك نوادي مناسبة.
+        حددي أنشطتك ومرافقك المفضلة وميزانيتك
+        حتى نقدر نرشحلك النادي الأنسب.
     </p>
-    <a class="apx-primary" href="{{ route('user.personal') }}">
+
+    <a class="apx-primary"
+        href="{{ route('user.personal') }}">
         تحديد تفضيلاتي
     </a>
 </section>
@@ -63,121 +132,132 @@
 @elseif ($recommendations->isEmpty())
 
 <section class="apx-panel apx-empty">
-    <h2>ما لقينا نوادي مطابقة حاليًا</h2>
+    <h2>ما لقينا نادي متوافق حاليًا</h2>
+
     <p>
-        جرّبي تعديل تفضيلاتك أو استكشفي
-        النوادي المعتمدة بنفسك.
+        ما في نوادٍ حصلت على نقاط تطابق
+        مع تفضيلاتك المحفوظة.
     </p>
 
-    <div class="apx-inline-actions">
-        <a class="apx-primary" href="{{ route('user.personal') }}">
-            تعديل التفضيلات
-        </a>
-
-        <a class="apx-secondary" href="{{ route('gyms.index') }}">
-            استكشف النوادي
-        </a>
-    </div>
+    <a class="apx-primary"
+        href="{{ route('user.personal') }}">
+        تعديل التفضيلات
+    </a>
 </section>
 
 @else
 
-<section class="apx-panel" style="margin-bottom: 20px;">
-    <h2>اختاري النوادي اللي حابة تقارني بينها</h2>
+@php
+$bestGym = $recommendations->first();
+$alternatives = $recommendations->skip(1)->take(3);
+@endphp
+
+<section class="smart-recommendation">
+
+    <span class="apx-eyebrow">
+        🏆 OPTIFIT TOP RECOMMENDATION
+    </span>
+
+    <h2>النادي الأنسب إلك</h2>
+
+    <h2>{{ $bestGym->gym_name }}</h2>
+
     <p>
-        النتائج مرتبة حسب درجة التوافق مع تفضيلاتك.
-        اختاري ناديين أو ثلاثة، ثم اضغطي مقارنة.
+        {{ $bestGym->city }}
+        @if ($bestGym->area)
+        · {{ $bestGym->area }}
+        @endif
     </p>
+
+    <p>
+        هذا النادي حصل على أعلى نقاط توافق
+        مع تفضيلاتك المحفوظة من بين
+        النوادي اللي تم تقييمها.
+    </p>
+
+    <div class="smart-price">
+        {{ $bestGym->memberships_min_price_jod !== null
+                ? number_format($bestGym->memberships_min_price_jod, 2) . ' د.أ'
+                : 'السعر غير محدد' }}
+    </div>
+
+    <p>
+        نقاط التوافق:
+        <strong>{{ $bestGym->match_score }}</strong>
+    </p>
+
+    <h3>✨ ليش اخترنالك هذا النادي؟</h3>
+
+    @if (!empty($bestGym->match_reasons))
+    <ul class="smart-reasons">
+        @foreach ($bestGym->match_reasons as $reason)
+        <li>{{ $reason }}</li>
+        @endforeach
+    </ul>
+    @else
+    <p>هذا النادي حقق أعلى نتيجة في التقييم الحالي.</p>
+    @endif
+
+    <a class="apx-primary"
+        href="{{ route('gyms.show', $bestGym) }}">
+        اكتشف تفاصيل النادي
+    </a>
+
 </section>
 
-<form
-    id="recommendations-compare-form"
-    method="GET"
-    action="{{ route('gyms.compare') }}">
+@if ($alternatives->isNotEmpty())
+
+<section class="smart-alternatives">
+
+    <h2>✨ بدائل مناسبة إلك</h2>
+
+    <p>
+        هاي نوادٍ ثانية حصلت على نقاط توافق
+        مع تفضيلاتك، مرتبة بعد الاختيار الأول.
+    </p>
+
     <div class="apx-cards">
 
-        @foreach ($recommendations as $gym)
+        @foreach ($alternatives as $gym)
 
-        <article class="apx-gym-tile">
+        <article class="smart-alternative-card">
 
-            <div class="apx-tile-media">
-                @if ($gym->images->first())
-                <img
-                    src="{{ asset('storage/' . $gym->images->first()->image_path) }}"
-                    alt="صورة {{ $gym->gym_name }}"
-                    loading="lazy">
-                @else
-                <div class="apx-tile-placeholder">
-                    <svg>
-                        <use href="#apx-spark" />
-                    </svg>
-                </div>
+            <span class="apx-eyebrow">
+                RECOMMENDED ALTERNATIVE
+            </span>
+
+            <h3>{{ $gym->gym_name }}</h3>
+
+            <p>
+                {{ $gym->city }}
+                @if ($gym->area)
+                · {{ $gym->area }}
                 @endif
-            </div>
+            </p>
 
-            <div class="apx-tile-body">
+            <p class="smart-price">
+                {{ $gym->memberships_min_price_jod !== null
+                                ? number_format($gym->memberships_min_price_jod, 2) . ' د.أ'
+                                : 'السعر غير محدد' }}
+            </p>
 
-                <div class="apx-tile-meta">
-                    <span>
-                        {{ $gym->city }}
-                        @if ($gym->area)
-                        · {{ $gym->area }}
-                        @endif
-                    </span>
+            <p>
+                نقاط التوافق:
+                <strong>{{ $gym->match_score }}</strong>
+            </p>
 
-                    <span class="apx-status-chip approved">
-                        {{ $gym->match_score }} نقاط توافق
-                    </span>
-                </div>
+            @if (!empty($gym->match_reasons))
+            <ul>
+                @foreach ($gym->match_reasons as $reason)
+                <li>{{ $reason }}</li>
+                @endforeach
+            </ul>
+            @endif
 
-                <h2>{{ $gym->gym_name }}</h2>
-
-                <p>
-                    {{ \Illuminate\Support\Str::limit(
-                                $gym->description ?: 'لا يوجد وصف مضاف.',
-                                100
-                            ) }}
-                </p>
-
-                @if (!empty($gym->match_reasons))
-                <div style="margin: 14px 0;">
-                    <strong>ليش رشحنا لك هذا النادي؟</strong>
-
-                    <ul style="padding-inline-start: 20px; margin-top: 8px;">
-                        @foreach ($gym->match_reasons as $reason)
-                        <li>{{ $reason }}</li>
-                        @endforeach
-                    </ul>
-                </div>
-                @endif
-
-                <div class="apx-tile-footer">
-
-                    <span>
-                        {{ $gym->memberships_min_price_jod !== null
-                                    ? number_format($gym->memberships_min_price_jod, 2) . ' د.أ'
-                                    : 'السعر غير محدد' }}
-                    </span>
-
-                    <a
-                        class="apx-primary"
-                        href="{{ route('gyms.show', $gym) }}">
-                        التفاصيل
-                    </a>
-
-                </div>
-
-                <label
-                    style="display: flex; align-items: center; gap: 8px; margin-top: 16px;">
-                    <input
-                        type="checkbox"
-                        name="gyms[]"
-                        value="{{ $gym->gym_id }}"
-                        class="recommendation-compare-checkbox">
-                    <span>اختيار للمقارنة</span>
-                </label>
-
-            </div>
+            <a class="apx-primary"
+                href="{{ route('gyms.show', $gym) }}">
+                عرض تفاصيل النادي
+            </a>
 
         </article>
 
@@ -185,84 +265,9 @@
 
     </div>
 
-    <div
-        class="apx-panel"
-        style="margin-top: 22px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
-        <span id="compare-selected-count">
-            تم اختيار 0 من 3 نوادٍ
-        </span>
+</section>
 
-        <button
-            id="recommendations-compare-button"
-            class="apx-primary"
-            type="submit"
-            disabled>
-            قارن النوادي المختارة
-        </button>
-
-        <a class="apx-secondary" href="{{ route('gyms.index') }}">
-            استكشف المزيد
-        </a>
-    </div>
-
-</form>
-
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
-        const form = document.getElementById(
-            'recommendations-compare-form'
-        );
-
-        const checkboxes = Array.from(
-            document.querySelectorAll(
-                '.recommendation-compare-checkbox'
-            )
-        );
-
-        const countLabel = document.getElementById(
-            'compare-selected-count'
-        );
-
-        const compareButton = document.getElementById(
-            'recommendations-compare-button'
-        );
-
-        function updateComparison() {
-            const selected = checkboxes.filter(
-                checkbox => checkbox.checked
-            );
-
-            countLabel.textContent =
-                'تم اختيار ' + selected.length + ' من 3 نوادٍ';
-
-            compareButton.disabled =
-                selected.length < 2 || selected.length > 3;
-
-            checkboxes.forEach(function(checkbox) {
-                checkbox.disabled = !checkbox.checked && selected.length >= 3;
-            });
-        }
-
-        checkboxes.forEach(function(checkbox) {
-            checkbox.addEventListener(
-                'change',
-                updateComparison
-            );
-        });
-
-        form.addEventListener('submit', function(event) {
-            const selectedCount = checkboxes.filter(
-                checkbox => checkbox.checked
-            ).length;
-
-            if (selectedCount < 2 || selectedCount > 3) {
-                event.preventDefault();
-            }
-        });
-
-        updateComparison();
-    });
-</script>
+@endif
 
 @endif
 

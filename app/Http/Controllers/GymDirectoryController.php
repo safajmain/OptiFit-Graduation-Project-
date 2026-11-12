@@ -13,11 +13,114 @@ use Illuminate\View\View;
 class GymDirectoryController extends Controller
 {
 
+
     public function index(Request $request): View
     {
-        // عرض توصيات النوادي تلقائيًا حسب بيانات بروفايل المستخدم.
-        return $this->assistant($request);
+        $filters = $request->validate([
+            'q' => ['nullable', 'string', 'max:120'],
+            'city' => ['nullable', 'string', 'max:100'],
+            'activity' => ['nullable', 'integer', 'exists:activities,activity_id'],
+            'facility' => ['nullable', 'integer', 'exists:facilities,facility_id'],
+            'max_price' => ['nullable', 'numeric', 'min:0'],
+            'sort' => ['nullable', Rule::in(['newest', 'name', 'rating', 'price'])],
+        ]);
+
+        $query = $this->approvedQuery();
+
+        $query->when(
+            $filters['q'] ?? null,
+            function (Builder $builder, string $term): void {
+                $builder->where(function (Builder $search) use ($term): void {
+                    $search->where('gym_name', 'like', "%{$term}%")
+                        ->orWhere('description', 'like', "%{$term}%")
+                        ->orWhere('city', 'like', "%{$term}%")
+                        ->orWhere('area', 'like', "%{$term}%");
+                });
+            }
+        )->when(
+            $filters['city'] ?? null,
+            function (Builder $builder, string $city): void {
+                $builder->where(function (Builder $location) use ($city): void {
+                    $location->where('city', 'like', "%{$city}%")
+                        ->orWhere('area', 'like', "%{$city}%");
+                });
+            }
+        )->when(
+            $filters['activity'] ?? null,
+            fn(Builder $builder, int $id) =>
+            $builder->whereHas(
+                'activities',
+                fn(Builder $relation) =>
+                $relation->where('activities.activity_id', $id)
+            )
+        )->when(
+            $filters['facility'] ?? null,
+            fn(Builder $builder, int $id) =>
+            $builder->whereHas(
+                'facilities',
+                fn(Builder $relation) =>
+                $relation->where('facilities.facility_id', $id)
+            )
+        )->when(
+            $filters['max_price'] ?? null,
+            fn(Builder $builder, $price) =>
+            $builder->whereHas(
+                'memberships',
+                fn(Builder $relation) =>
+                $relation->where('price_jod', '<=', $price)
+            )
+        );
+
+        match ($filters['sort'] ?? 'newest') {
+            'name' => $query->orderBy('gym_name'),
+            'rating' => $query->orderByDesc('reviews_avg_rating'),
+            'price' => $query->orderBy('memberships_min_price_jod'),
+            default => $query->latest('gym_id'),
+        };
+
+        $gyms = $query->paginate(12)->withQueryString();
+
+        $activities = Activity::query()
+            ->orderBy('activity_name')
+            ->get();
+
+        $facilities = Facility::query()
+            ->orderBy('facility_name')
+            ->get();
+
+        $favoriteIds = $request->user()
+            ->favoriteGyms()
+            ->pluck('gyms.gym_id')
+            ->map(fn($id) => (int) $id);
+
+        $mapGyms = $this->approvedQuery()
+            ->whereNotNull('latitude')
+            ->whereNotNull('longitude')
+            ->whereBetween('latitude', [-90, 90])
+            ->whereBetween('longitude', [-180, 180])
+            ->get()
+            ->map(fn(Gym $gym): array => [
+                'id' => (int) $gym->gym_id,
+                'name' => $gym->gym_name,
+                'lat' => (float) $gym->latitude,
+                'lng' => (float) $gym->longitude,
+                'url' => route('gyms.show', $gym),
+                'city' => $gym->city,
+                'area' => $gym->area,
+                'price' => $gym->memberships_min_price_jod,
+            ])
+            ->values();
+
+        return view('optifit.user.gyms.index', compact(
+            'gyms',
+            'activities',
+            'facilities',
+            'filters',
+            'favoriteIds',
+            'mapGyms'
+        ));
     }
+
 
 
     public function show(Request $request, Gym $gym): View
@@ -118,26 +221,28 @@ class GymDirectoryController extends Controller
 
     public function assistant(Request $request): View
     {
+        $coordinates = $request->validate([
+            'lat' => ['required_with:lng', 'numeric', 'between:-90,90'],
+            'lng' => ['required_with:lat', 'numeric', 'between:-180,180'],
+        ]);
+
+        $hasSelectedLocation = isset($coordinates['lat'], $coordinates['lng']);
+        $selectedLat = $hasSelectedLocation ? (float) $coordinates['lat'] : null;
+        $selectedLng = $hasSelectedLocation ? (float) $coordinates['lng'] : null;
+        $radiusKm = 5;
+
         $user = $request->user();
-
         $preference = $user->preferences()->first();
-
-        $activityNames = $user->preferredActivities()
-            ->pluck('activity_name');
-
-        $facilityNames = $user->preferredFacilities()
-            ->pluck('facility_name');
+        $activityNames = $user->preferredActivities()->pluck('activity_name');
+        $facilityNames = $user->preferredFacilities()->pluck('facility_name');
 
         $budget = $preference?->max_budget !== null
             ? (float) $preference->max_budget
             : null;
 
-        $location = mb_strtolower(
-            trim((string) $preference?->location)
-        );
+        $location = mb_strtolower(trim((string) $preference?->location));
 
-        $hasPreferences =
-            $activityNames->isNotEmpty()
+        $hasPreferences = $activityNames->isNotEmpty()
             || $facilityNames->isNotEmpty()
             || $budget !== null
             || $location !== '';
@@ -145,86 +250,81 @@ class GymDirectoryController extends Controller
         $recommendations = collect();
 
         if ($hasPreferences) {
-            $recommendations = $this->approvedQuery()
-                ->get()
-                ->map(function (Gym $gym) use (
-                    $activityNames,
-                    $facilityNames,
-                    $budget,
-                    $location
-                ): Gym {
-                    $matchedActivities = $gym->activities
-                        ->pluck('activity_name')
-                        ->intersect($activityNames)
-                        ->values();
+            $gyms = $this->approvedQuery()->get();
 
-                    $matchedFacilities = $gym->facilities
-                        ->pluck('facility_name')
-                        ->intersect($facilityNames)
-                        ->values();
+            if ($hasSelectedLocation) {
+                $gyms = $gyms->filter(function (Gym $gym) use ($selectedLat, $selectedLng, $radiusKm): bool {
+                    if ($gym->latitude === null || $gym->longitude === null) {
+                        return false;
+                    }
+
+                    $gymLat = (float) $gym->latitude;
+                    $gymLng = (float) $gym->longitude;
+
+                    if ($gymLat < -90 || $gymLat > 90 || $gymLng < -180 || $gymLng > 180) {
+                        return false;
+                    }
+
+                    $latDelta = deg2rad($gymLat - $selectedLat);
+                    $lngDelta = deg2rad($gymLng - $selectedLng);
+                    $a = sin($latDelta / 2) ** 2
+                        + cos(deg2rad($selectedLat)) * cos(deg2rad($gymLat))
+                        * sin($lngDelta / 2) ** 2;
+                    $a = max(0.0, min(1.0, $a));
+                    $distanceKm = 6371 * 2 * atan2(sqrt($a), sqrt(1 - $a));
+
+                    return $distanceKm <= $radiusKm;
+                });
+            }
+
+            $recommendations = $gyms
+                ->map(function (Gym $gym) use ($activityNames, $facilityNames, $budget, $location): Gym {
+                    $matchedActivities = $gym->activities->pluck('activity_name')
+                        ->intersect($activityNames)->values();
+                    $matchedFacilities = $gym->facilities->pluck('facility_name')
+                        ->intersect($facilityNames)->values();
 
                     $activityMatches = $matchedActivities->count();
                     $facilityMatches = $matchedFacilities->count();
-
                     $price = $gym->memberships->min('price_jod');
 
                     $locationMatch = $location !== ''
-                        && collect([
-                            $gym->city,
-                            $gym->area,
-                            $gym->address,
-                        ])
+                        && collect([$gym->city, $gym->area, $gym->address])
                         ->filter()
-                        ->contains(
-                            fn($value) => str_contains(
-                                mb_strtolower((string) $value),
-                                $location
-                            )
-                        );
+                        ->contains(fn($value) => str_contains(
+                            mb_strtolower((string) $value),
+                            $location
+                        ));
 
                     $budgetMatch = $budget !== null
                         && $price !== null
                         && (float) $price <= $budget;
 
-                    $score =
-                        ($activityMatches * 3)
+                    $score = ($activityMatches * 3)
                         + ($facilityMatches * 2)
                         + ((int) $locationMatch * 2)
                         + (int) $budgetMatch;
 
                     $reasons = [];
-
                     if ($matchedActivities->isNotEmpty()) {
-                        $reasons[] = 'أنشطة مناسبة: '
-                            . $matchedActivities->implode('، ');
+                        $reasons[] = 'أنشطة مناسبة: ' . $matchedActivities->implode('، ');
                     }
-
                     if ($matchedFacilities->isNotEmpty()) {
-                        $reasons[] = 'مرافق مناسبة: '
-                            . $matchedFacilities->implode('، ');
+                        $reasons[] = 'مرافق مناسبة: ' . $matchedFacilities->implode('، ');
                     }
-
                     if ($locationMatch) {
                         $reasons[] = 'موقع النادي يناسب منطقتك';
                     }
-
                     if ($budgetMatch) {
                         $reasons[] = 'السعر ضمن ميزانيتك';
                     }
 
                     $gym->setAttribute('match_score', $score);
-
-                    $gym->setAttribute(
-                        'match_reasons',
-                        $reasons
-                    );
+                    $gym->setAttribute('match_reasons', $reasons);
 
                     return $gym;
                 })
-                ->filter(
-                    fn(Gym $gym) =>
-                    $gym->match_score > 0
-                )
+                ->filter(fn(Gym $gym) => $gym->match_score > 0)
                 ->sortByDesc('match_score')
                 ->values();
         }
@@ -234,7 +334,11 @@ class GymDirectoryController extends Controller
             'preference',
             'activityNames',
             'facilityNames',
-            'hasPreferences'
+            'hasPreferences',
+            'hasSelectedLocation',
+            'selectedLat',
+            'selectedLng',
+            'radiusKm'
         ));
     }
 

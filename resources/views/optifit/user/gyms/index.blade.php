@@ -116,91 +116,7 @@
     </a>
 </section>
 
-<form class="apx-filter-bar" method="GET" action="{{ route('gyms.index') }}">
 
-    <div class="apx-field">
-        <label for="q">بحث</label>
-        <input
-            id="q"
-            name="q"
-            type="search"
-            value="{{ $filters['q'] ?? '' }}"
-            placeholder="اسم النادي أو المنطقة">
-    </div>
-
-    <div class="apx-field">
-        <label for="city">المدينة أو المنطقة</label>
-        <input
-            id="city"
-            name="city"
-            value="{{ $filters['city'] ?? '' }}"
-            placeholder="مثلاً: عمّان">
-    </div>
-
-    <div class="apx-field">
-        <label for="activity">النشاط</label>
-        <select id="activity" name="activity">
-            <option value="">كل الأنشطة</option>
-
-            @foreach($activities as $activity)
-            <option
-                value="{{ $activity->activity_id }}"
-                @selected(($filters['activity'] ?? null)==$activity->activity_id)
-                >
-                {{ $activity->activity_name }}
-            </option>
-            @endforeach
-        </select>
-    </div>
-
-    <div class="apx-field">
-        <label for="facility">المرافق</label>
-        <select id="facility" name="facility">
-            <option value="">كل المرافق</option>
-
-            @foreach($facilities as $facility)
-            <option
-                value="{{ $facility->facility_id }}"
-                @selected(($filters['facility'] ?? null)==$facility->facility_id)
-                >
-                {{ $facility->facility_name }}
-            </option>
-            @endforeach
-        </select>
-    </div>
-
-    <div class="apx-field">
-        <label for="max_price">السعر الأقصى (د.أ)</label>
-        <input
-            id="max_price"
-            name="max_price"
-            type="number"
-            min="0"
-            step="0.01"
-            value="{{ $filters['max_price'] ?? '' }}">
-    </div>
-
-    <div class="apx-field">
-        <label for="sort">الترتيب</label>
-        <select id="sort" name="sort">
-            <option value="newest">الأحدث</option>
-            <option value="name" @selected(($filters['sort'] ?? '' )==='name' )>الاسم</option>
-            <option value="rating" @selected(($filters['sort'] ?? '' )==='rating' )>التقييم</option>
-            <option value="price" @selected(($filters['sort'] ?? '' )==='price' )>السعر</option>
-        </select>
-    </div>
-
-    <button class="apx-primary" type="submit">
-        بحث
-    </button>
-
-    @if(request()->query())
-    <a class="apx-secondary" href="{{ route('gyms.index') }}">
-        مسح الفلاتر
-    </a>
-    @endif
-
-</form>
 
 <section class="apx-panel" style="margin-top:20px;padding:18px;">
 
@@ -248,6 +164,14 @@
             class="apx-primary"
             disabled>
             عرض النوادي حول الموقع
+        </button>
+
+        <button
+            id="discover-recommendations"
+            type="button"
+            class="apx-secondary"
+            disabled>
+            ✨ توصيات لهذه المنطقة
         </button>
 
         <button
@@ -505,6 +429,7 @@
         const centerButton = document.getElementById('discover-pick-center');
         const areaSelect = document.getElementById('discover-area-select');
         const showAllButton = document.getElementById('discover-show-all');
+        const recommendationsButton = document.getElementById('discover-recommendations');
 
         const count = document.getElementById('discover-result-count');
         const note = document.getElementById('discover-area-note');
@@ -623,6 +548,17 @@
                 window.location.href = url.toString();
             });
         }
+
+        recommendationsButton.addEventListener('click', function() {
+            if (!selectedPosition) {
+                return;
+            }
+
+            const url = new URL("{{ route('assistant.index') }}", window.location.origin);
+            url.searchParams.set('lat', selectedPosition.lat.toFixed(7));
+            url.searchParams.set('lng', selectedPosition.lng.toFixed(7));
+            window.location.href = url.toString();
+        });
 
         function showAll() {
 
@@ -781,6 +717,7 @@
             ).addTo(map);
 
             searchButton.disabled = false;
+            recommendationsButton.disabled = false;
 
             status.textContent =
                 'تم اختيار الموقع. اضغطي «عرض النوادي حول الموقع».';
@@ -968,4 +905,3 @@
 </script>
 
 @endpush
-س
