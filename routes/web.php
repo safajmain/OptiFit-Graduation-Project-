@@ -11,6 +11,7 @@ use App\Http\Controllers\OwnerGymDetailsController;
 use App\Http\Controllers\ReminderController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\GoogleAuthController;
+use App\Http\Controllers\GymOwnerProfileController;
 
 Route::get('/', function () {
     return view('welcome');
@@ -288,6 +289,13 @@ Route::middleware(['auth', 'verified', 'role:2'])
     ->prefix('owner')
     ->name('owner.')
     ->group(function () {
+        // Gym owner profile
+        Route::get('profile', [GymOwnerProfileController::class, 'edit'])
+            ->name('profile.edit');
+
+        Route::patch('profile', [GymOwnerProfileController::class, 'update'])
+            ->name('profile.update');
+
         Route::resource('gyms', OwnerGymController::class);
 
         Route::put('gyms/{gym}/facilities', [OwnerGymDetailsController::class, 'facilities'])
